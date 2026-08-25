@@ -75,6 +75,28 @@ class ProbeGuardMiddlewareTest extends TestCase
         ]);
     }
 
+    public function test_expired_block_is_marked_released_and_request_is_allowed(): void
+    {
+        BlockedIp::query()->create([
+            'ip_address' => '203.0.113.40',
+            'reason' => 'Suspicious path probe',
+            'path' => '/config.json',
+            'method' => 'GET',
+            'hit_count' => 1,
+            'blocked_until' => now()->subMinute(),
+        ]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.40'])
+            ->get('/')
+            ->assertOk()
+            ->assertSee('ok');
+
+        $this->assertDatabaseHas('probe_guard_blocked_ips', [
+            'ip_address' => '203.0.113.40',
+            'status' => 'expired',
+        ]);
+    }
+
     public function test_whitelisted_ip_is_never_blocked(): void
     {
         config()->set('probe-guard.ip_whitelist', ['203.0.113.50']);

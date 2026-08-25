@@ -45,6 +45,10 @@ class BlockMaliciousRequests
             );
         }
 
+        if ($blockedIp !== null) {
+            $this->blocks->unblock($blockedIp);
+        }
+
         $result = $this->detector->detect($request);
 
         if ($result === null) {
