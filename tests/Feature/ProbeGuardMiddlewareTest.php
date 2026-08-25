@@ -159,7 +159,7 @@ class ProbeGuardMiddlewareTest extends TestCase
         }
     }
 
-    public function test_secret_backup_webhook_and_encoded_admin_probes_are_blocked(): void
+    public function test_secret_backup_and_encoded_admin_probes_are_blocked(): void
     {
         foreach ([
             '/private.pem',
@@ -167,8 +167,6 @@ class ProbeGuardMiddlewareTest extends TestCase
             '/credentials/%61dmin',
             '/backup.tar.gz',
             '/database.sqlite',
-            '/webhooks/stripe',
-            '/dev/%61dmin',
             '/wp-json/wp/v2/users',
             '/docker-compose.prod.yml',
             '/terraform/main.tf',
@@ -185,6 +183,29 @@ class ProbeGuardMiddlewareTest extends TestCase
                 'ip_address' => $ipAddress,
             ]);
         }
+    }
+
+    public function test_genuine_application_api_webhook_upload_and_environment_routes_are_not_blocked(): void
+    {
+        foreach ([
+            '/api/v1/profile',
+            '/api/v1/home',
+            '/api/webhooks/stripe',
+            '/webhooks/stripe',
+            '/uploads/avatar.png',
+            '/api/upload',
+            '/dev/team',
+            '/staging/dashboard',
+            '/downloads/report.zip',
+            '/docs/openapi.yaml',
+        ] as $index => $path) {
+            $this->withServerVariables(['REMOTE_ADDR' => '203.0.116.'.($index + 1)])
+                ->get($path)
+                ->assertOk()
+                ->assertSee('missing');
+        }
+
+        $this->assertDatabaseCount('probe_guard_blocked_ips', 0);
     }
 
     public function test_cleanup_command_marks_expired_blocks_without_deleting_audit_history(): void
