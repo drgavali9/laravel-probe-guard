@@ -17,10 +17,10 @@ class SuspiciousRequest extends Model
     protected function casts(): array
     {
         return [
-            'headers' => 'array',
-            'metadata' => 'array',
+            'headers'     => 'array',
+            'metadata'    => 'array',
             'detected_at' => 'datetime',
-            'severity' => ThreatSeverity::class,
+            'severity'    => ThreatSeverity::class,
         ];
     }
 }

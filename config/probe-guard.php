@@ -4,7 +4,7 @@ return [
     'enabled' => env('PROBE_GUARD_ENABLED', true),
 
     'table_names' => [
-        'blocked_ips' => 'probe_guard_blocked_ips',
+        'blocked_ips'         => 'probe_guard_blocked_ips',
         'suspicious_requests' => 'probe_guard_suspicious_requests',
     ],
 
@@ -18,12 +18,12 @@ return [
 
     'blocked_response' => [
         'status' => 403,
-        'body' => 'Access blocked temporarily due to suspicious activity.',
+        'body'   => 'Access blocked temporarily due to suspicious activity.',
     ],
 
     'detected_response' => [
         'status' => 404,
-        'body' => null,
+        'body'   => null,
     ],
 
     'ip_whitelist' => array_values(array_filter(array_map(
@@ -223,7 +223,7 @@ return [
             'dnsmeasure' => 'Suspicious DNS probe',
         ],
         'file' => [
-            '../' => 'Suspicious file traversal probe',
+            '../'  => 'Suspicious file traversal probe',
             '..\\' => 'Suspicious file traversal probe',
             '.env' => 'Suspicious environment file probe',
         ],
@@ -253,7 +253,7 @@ return [
     ],
 
     'filament' => [
-        'enabled' => true,
+        'enabled'          => true,
         'navigation_group' => 'Security',
     ],
 ];

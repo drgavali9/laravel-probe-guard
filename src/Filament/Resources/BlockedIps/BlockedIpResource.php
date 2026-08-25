@@ -3,6 +3,7 @@
 namespace ProbeGuard\LaravelProbeGuard\Filament\Resources\BlockedIps;
 
 use BackedEnum;
+use DateInterval;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -91,7 +92,7 @@ class BlockedIpResource extends Resource
                         ->action(fn (BlockedIp $record): bool => $record->forceFill([
                             'blocked_until' => ($record->blocked_until?->isFuture() === true ? $record->blocked_until : now())
                                 ->copy()
-                                ->add(\DateInterval::createFromDateString((string) config('probe-guard.block_duration', '7 days'))),
+                                ->add(DateInterval::createFromDateString((string) config('probe-guard.block_duration', '7 days'))),
                             'unblocked_at' => null,
                         ])->save()),
                 ])->icon('heroicon-m-ellipsis-vertical')->color('gray')->button()->hiddenLabel(),

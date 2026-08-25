@@ -65,7 +65,7 @@ class ThreatDetectionService implements ThreatDetector
                 if ($value !== '' && Str::contains($value, Str::lower((string) $needle))) {
                     return new ThreatDetectionResult((string) $reason, ThreatSeverity::Medium, [
                         'query_key' => $key,
-                        'needle' => $needle,
+                        'needle'    => $needle,
                     ]);
                 }
             }

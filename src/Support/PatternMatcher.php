@@ -18,7 +18,7 @@ class PatternMatcher
         foreach ($prefixes as $prefix) {
             $normalizedPrefix = $this->normalizer->normalize((string) $prefix);
 
-            if ($normalizedPrefix !== '' && ($path === $normalizedPrefix || Str::startsWith($path, $normalizedPrefix.'/'))) {
+            if ($normalizedPrefix !== '' && ($path === $normalizedPrefix || Str::startsWith($path, $normalizedPrefix . '/'))) {
                 return true;
             }
         }
