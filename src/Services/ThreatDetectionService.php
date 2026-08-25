@@ -21,6 +21,10 @@ class ThreatDetectionService implements ThreatDetector
     {
         $path = $this->normalizer->normalize($request->path());
 
+        if ($queryThreat = $this->detectQueryThreat($request)) {
+            return $queryThreat;
+        }
+
         if ($this->isSafePath($path)) {
             return null;
         }
@@ -43,6 +47,11 @@ class ThreatDetectionService implements ThreatDetector
             return new ThreatDetectionResult('Suspicious path pattern probe', ThreatSeverity::Critical, ['pattern' => $pattern]);
         }
 
+        return null;
+    }
+
+    private function detectQueryThreat(Request $request): ?ThreatDetectionResult
+    {
         foreach (config('probe-guard.query_keys', []) as $key => $reason) {
             if ($request->query->has((string) $key)) {
                 return new ThreatDetectionResult((string) $reason, ThreatSeverity::Medium, ['query_key' => $key]);

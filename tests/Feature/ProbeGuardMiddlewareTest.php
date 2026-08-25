@@ -135,6 +135,58 @@ class ProbeGuardMiddlewareTest extends TestCase
         ]);
     }
 
+    public function test_scanner_paths_from_observability_frameworks_and_dev_tools_are_blocked(): void
+    {
+        foreach ([
+            '/_next',
+            '/next.config.js',
+            '/grafana/api/datasources',
+            '/kibana/api/status',
+            '/_cluster/health',
+            '/elasticsearch/_cat/indices',
+            '/app_dev.php/_profiler/open?file=.env',
+            '/xampp/php-cgi.exe?%ADd%20auto_prepend_file%3Dphp://input',
+        ] as $index => $path) {
+            $ipAddress = '203.0.114.'.($index + 1);
+
+            $this->withServerVariables(['REMOTE_ADDR' => $ipAddress])
+                ->get($path)
+                ->assertNotFound();
+
+            $this->assertDatabaseHas('probe_guard_blocked_ips', [
+                'ip_address' => $ipAddress,
+            ]);
+        }
+    }
+
+    public function test_secret_backup_webhook_and_encoded_admin_probes_are_blocked(): void
+    {
+        foreach ([
+            '/private.pem',
+            '/api/secrets',
+            '/credentials/%61dmin',
+            '/backup.tar.gz',
+            '/database.sqlite',
+            '/webhooks/stripe',
+            '/dev/%61dmin',
+            '/wp-json/wp/v2/users',
+            '/docker-compose.prod.yml',
+            '/terraform/main.tf',
+            '/?file=..%2F..%2F..%2F..%2Fvar%2Fwww%2Fhtml%2F.env',
+            '/?phpinfo=1',
+        ] as $index => $path) {
+            $ipAddress = '203.0.115.'.($index + 1);
+
+            $this->withServerVariables(['REMOTE_ADDR' => $ipAddress])
+                ->get($path)
+                ->assertNotFound();
+
+            $this->assertDatabaseHas('probe_guard_blocked_ips', [
+                'ip_address' => $ipAddress,
+            ]);
+        }
+    }
+
     public function test_cleanup_command_marks_expired_blocks_without_deleting_audit_history(): void
     {
         $blockedIp = BlockedIp::query()->create([
