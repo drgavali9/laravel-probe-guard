@@ -20,7 +20,7 @@ class BlockMaliciousRequests
     ) {}
 
     /**
-     * @param Closure(Request): Response $next
+     * @param  Closure(Request): Response  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -39,7 +39,7 @@ class BlockMaliciousRequests
         if ($blockedIp?->isActive() === true) {
             $this->blocks->recordBlockedHit($blockedIp, $request);
 
-            return response(
+            return $this->probeGuardResponse(
                 config('probe-guard.blocked_response.body', 'Access blocked temporarily due to suspicious activity.'),
                 (int) config('probe-guard.blocked_response.status', 403),
             );
@@ -60,10 +60,19 @@ class BlockMaliciousRequests
         $this->blocks->block($ipAddress, $request, $result);
         $this->logDetection($ipAddress, $request, $result->reason);
 
-        return response(
+        return $this->probeGuardResponse(
             config('probe-guard.detected_response.body'),
             (int) config('probe-guard.detected_response.status', 404),
         );
+    }
+
+    private function probeGuardResponse(?string $body, int $status): Response
+    {
+        $response = response($body, $status);
+
+        $response->headers->set('X-Probe-Guard-Blocked', '1');
+
+        return $response;
     }
 
     private function logDetection(string $ipAddress, Request $request, string $reason): void
@@ -73,10 +82,10 @@ class BlockMaliciousRequests
         }
 
         Log::channel(config('probe-guard.logging.channel'))->warning('Suspicious request blocked.', [
-            'ip'         => $ipAddress,
-            'path'       => '/' . ltrim($request->path(), '/'),
-            'method'     => $request->method(),
-            'reason'     => $reason,
+            'ip' => $ipAddress,
+            'path' => '/'.ltrim($request->path(), '/'),
+            'method' => $request->method(),
+            'reason' => $reason,
             'user_agent' => $request->userAgent(),
         ]);
     }
