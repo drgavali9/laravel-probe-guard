@@ -5,7 +5,6 @@ namespace ProbeGuard\LaravelProbeGuard;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Telescope\EntryType;
 use Laravel\Telescope\Telescope;
 use ProbeGuard\LaravelProbeGuard\Console\Commands\BlockIpCommand;
 use ProbeGuard\LaravelProbeGuard\Console\Commands\CleanupExpiredBlocksCommand;
@@ -23,7 +22,7 @@ class RequestGuardServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/probe-guard.php', 'probe-guard');
+        $this->mergeConfigFrom(__DIR__.'/../config/probe-guard.php', 'probe-guard');
 
         $this->app->bind(ThreatDetector::class, ThreatDetectionService::class);
         $this->app->bind(IpResolver::class, ClientIpResolver::class);
@@ -33,11 +32,11 @@ class RequestGuardServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->publishes([
-            __DIR__ . '/../config/probe-guard.php' => config_path('probe-guard.php'),
+            __DIR__.'/../config/probe-guard.php' => config_path('probe-guard.php'),
         ], 'probe-guard-config');
 
         $this->publishesMigrations([
-            __DIR__ . '/../database/migrations' => database_path('migrations'),
+            __DIR__.'/../database/migrations' => database_path('migrations'),
         ], 'probe-guard-migrations');
 
         $this->app->make(Router::class)->aliasMiddleware(
@@ -63,20 +62,20 @@ class RequestGuardServiceProvider extends ServiceProvider
 
     private function registerTelescopeFilter(): void
     {
-        if (! config('probe-guard.telescope.ignore_probe_guard_requests', true)) {
+        if (! class_exists(Telescope::class)) {
             return;
         }
 
-        if (! class_exists(Telescope::class) || ! class_exists(EntryType::class)) {
-            return;
-        }
-
-        Telescope::filter(function ($entry): bool {
-            if ($entry->type !== EntryType::REQUEST) {
+        Telescope::filterBatch(function (): bool {
+            if (! config('probe-guard.telescope.ignore_blocked_requests', config('probe-guard.telescope.ignore_probe_guard_requests', true))) {
                 return true;
             }
 
-            return ($entry->content['response_headers']['x-probe-guard-blocked'] ?? null) !== '1';
+            if (! $this->app->bound('request')) {
+                return true;
+            }
+
+            return ! $this->app['request']->attributes->get('probe_guard.blocked_ip_request', false);
         });
     }
 }
