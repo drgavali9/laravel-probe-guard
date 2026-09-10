@@ -12,7 +12,9 @@ return [
 
     'auto_register_global_middleware' => env('PROBE_GUARD_GLOBAL_MIDDLEWARE', false),
 
-    'block_duration' => env('PROBE_GUARD_BLOCK_DURATION', '7 days'),
+    'block_duration_days' => (int) env('PROBE_GUARD_BLOCK_DURATION_DAYS', 7),
+
+    'block_duration' => env('PROBE_GUARD_BLOCK_DURATION', null),
 
     'extend_existing_blocks' => true,
 

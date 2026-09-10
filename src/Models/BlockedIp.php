@@ -19,21 +19,32 @@ class BlockedIp extends Model
     protected function casts(): array
     {
         return [
-            'blocked_until'   => 'datetime',
+            'blocked_at' => 'datetime',
+            'expires_at' => 'datetime',
+            'blocked_until' => 'datetime',
             'last_attempt_at' => 'datetime',
-            'unblocked_at'    => 'datetime',
-            'status'          => BlockStatus::class,
-            'severity'        => ThreatSeverity::class,
+            'unblocked_at' => 'datetime',
+            'status' => BlockStatus::class,
+            'severity' => ThreatSeverity::class,
         ];
     }
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('blocked_until', '>', now())->whereNull('unblocked_at');
+        return $query->where(function (Builder $query): void {
+            $query->where('expires_at', '>', now())
+                ->orWhereNull('expires_at');
+        })->whereNull('unblocked_at');
     }
 
     public function isActive(): bool
     {
-        return $this->unblocked_at === null && $this->blocked_until?->isFuture() === true;
+        if ($this->unblocked_at !== null) {
+            return false;
+        }
+
+        $expiresAt = $this->expires_at ?? $this->blocked_until;
+
+        return $expiresAt === null || $expiresAt->isFuture();
     }
 }

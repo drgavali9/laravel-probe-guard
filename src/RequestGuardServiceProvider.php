@@ -2,6 +2,7 @@
 
 namespace ProbeGuard\LaravelProbeGuard;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
@@ -49,6 +50,7 @@ class RequestGuardServiceProvider extends ServiceProvider
         }
 
         $this->registerTelescopeFilter();
+        $this->registerSchedule();
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -76,6 +78,24 @@ class RequestGuardServiceProvider extends ServiceProvider
             }
 
             return ! $this->app['request']->attributes->get('probe_guard.blocked_ip_request', false);
+        });
+    }
+
+    private function registerSchedule(): void
+    {
+        if (! class_exists(Schedule::class)) {
+            return;
+        }
+
+        $this->app->booted(function (): void {
+            if (! $this->app->bound(Schedule::class)) {
+                return;
+            }
+
+            $this->app->make(Schedule::class)
+                ->command('probe-guard:cleanup-expired')
+                ->daily()
+                ->withoutOverlapping();
         });
     }
 }

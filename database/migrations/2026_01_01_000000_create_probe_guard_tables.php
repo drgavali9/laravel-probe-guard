@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('method', 16)->nullable();
             $table->text('user_agent')->nullable();
             $table->unsignedInteger('hit_count')->default(1);
+            $table->timestamp('blocked_at')->nullable()->index();
+            $table->timestamp('expires_at')->nullable()->index();
             $table->timestamp('blocked_until')->index();
             $table->timestamp('last_attempt_at')->nullable();
             $table->timestamp('unblocked_at')->nullable();

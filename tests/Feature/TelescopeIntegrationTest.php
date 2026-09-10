@@ -68,6 +68,8 @@ class TelescopeIntegrationTest extends TestCase
             'path' => '/config.json',
             'method' => 'GET',
             'hit_count' => 1,
+            'blocked_at' => now()->subDay(),
+            'expires_at' => now()->addDays(6),
             'blocked_until' => now()->addDays(7),
         ]);
 
@@ -86,6 +88,34 @@ class TelescopeIntegrationTest extends TestCase
         Telescope::store(app(EntriesRepository::class));
 
         $this->assertDatabaseCount('telescope_entries', 0);
+    }
+
+    public function test_expired_blocked_ip_request_resumes_normal_telescope_recording(): void
+    {
+        BlockedIp::query()->create([
+            'ip_address' => '203.0.113.202',
+            'reason' => 'Suspicious path probe',
+            'path' => '/config.json',
+            'method' => 'GET',
+            'hit_count' => 1,
+            'blocked_at' => now()->subDays(8),
+            'expires_at' => now()->subMinute(),
+            'blocked_until' => now()->subMinute(),
+        ]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.202'])
+            ->get('/')
+            ->assertOk();
+
+        Telescope::recordRequest(IncomingEntry::make([
+            'uri' => '/',
+            'method' => 'GET',
+            'response_status' => 200,
+        ]));
+        Telescope::store(app(EntriesRepository::class));
+
+        $this->assertGreaterThan(0, EntryModel::query()->count());
+        $this->assertTrue(EntryModel::query()->where('type', 'request')->exists());
     }
 
     public function test_normal_request_entries_are_still_stored_by_telescope(): void

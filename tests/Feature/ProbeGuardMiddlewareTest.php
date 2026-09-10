@@ -2,7 +2,9 @@
 
 namespace ProbeGuard\LaravelProbeGuard\Tests\Feature;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use ProbeGuard\LaravelProbeGuard\Models\BlockedIp;
 use ProbeGuard\LaravelProbeGuard\Models\SuspiciousRequest;
 use ProbeGuard\LaravelProbeGuard\Tests\TestCase;
@@ -33,8 +35,10 @@ class ProbeGuardMiddlewareTest extends TestCase
 
     public function test_suspicious_path_is_recorded_and_returns_not_found(): void
     {
+        Carbon::setTestNow('2026-09-10 10:00:00');
+
         $this->withServerVariables([
-            'REMOTE_ADDR'     => '203.0.113.20',
+            'REMOTE_ADDR' => '203.0.113.20',
             'HTTP_USER_AGENT' => 'scanner',
         ])->get('/composer.json')
             ->assertNotFound()
@@ -42,26 +46,53 @@ class ProbeGuardMiddlewareTest extends TestCase
 
         $this->assertDatabaseHas('probe_guard_blocked_ips', [
             'ip_address' => '203.0.113.20',
-            'reason'     => 'Suspicious path probe',
-            'path'       => '/composer.json',
-            'method'     => 'GET',
-            'hit_count'  => 1,
+            'reason' => 'Suspicious path probe',
+            'path' => '/composer.json',
+            'method' => 'GET',
+            'hit_count' => 1,
         ]);
+
+        $blockedIp = BlockedIp::query()->where('ip_address', '203.0.113.20')->firstOrFail();
+
+        $this->assertTrue($blockedIp->blocked_at->equalTo(now()));
+        $this->assertTrue($blockedIp->expires_at->equalTo(now()->addDays(7)));
+        $this->assertTrue($blockedIp->blocked_until->equalTo($blockedIp->expires_at));
 
         $this->assertDatabaseHas('probe_guard_suspicious_requests', [
             'ip_address' => '203.0.113.20',
-            'reason'     => 'Suspicious path probe',
+            'reason' => 'Suspicious path probe',
         ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_block_duration_days_config_controls_expiry(): void
+    {
+        Carbon::setTestNow('2026-09-10 10:00:00');
+        config()->set('probe-guard.block_duration', null);
+        config()->set('probe-guard.block_duration_days', 3);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.21'])
+            ->get('/composer.json')
+            ->assertNotFound();
+
+        $blockedIp = BlockedIp::query()->where('ip_address', '203.0.113.21')->firstOrFail();
+
+        $this->assertTrue($blockedIp->expires_at->equalTo(now()->addDays(3)));
+
+        Carbon::setTestNow();
     }
 
     public function test_active_blocked_ip_is_rejected_before_normal_routes(): void
     {
         BlockedIp::query()->create([
-            'ip_address'    => '203.0.113.30',
-            'reason'        => 'Suspicious path probe',
-            'path'          => '/config.json',
-            'method'        => 'GET',
-            'hit_count'     => 1,
+            'ip_address' => '203.0.113.30',
+            'reason' => 'Suspicious path probe',
+            'path' => '/config.json',
+            'method' => 'GET',
+            'hit_count' => 1,
+            'blocked_at' => now()->subDay(),
+            'expires_at' => now()->addDays(7),
             'blocked_until' => now()->addDays(7),
         ]);
 
@@ -73,19 +104,21 @@ class ProbeGuardMiddlewareTest extends TestCase
 
         $this->assertDatabaseHas('probe_guard_blocked_ips', [
             'ip_address' => '203.0.113.30',
-            'path'       => '/',
-            'hit_count'  => 2,
+            'path' => '/',
+            'hit_count' => 2,
         ]);
     }
 
     public function test_expired_block_is_marked_released_and_request_is_allowed(): void
     {
         BlockedIp::query()->create([
-            'ip_address'    => '203.0.113.40',
-            'reason'        => 'Suspicious path probe',
-            'path'          => '/config.json',
-            'method'        => 'GET',
-            'hit_count'     => 1,
+            'ip_address' => '203.0.113.40',
+            'reason' => 'Suspicious path probe',
+            'path' => '/config.json',
+            'method' => 'GET',
+            'hit_count' => 1,
+            'blocked_at' => now()->subDays(8),
+            'expires_at' => now()->subMinute(),
             'blocked_until' => now()->subMinute(),
         ]);
 
@@ -96,7 +129,6 @@ class ProbeGuardMiddlewareTest extends TestCase
 
         $this->assertDatabaseHas('probe_guard_blocked_ips', [
             'ip_address' => '203.0.113.40',
-            'status'     => 'expired',
         ]);
     }
 
@@ -117,7 +149,7 @@ class ProbeGuardMiddlewareTest extends TestCase
         config()->set('probe-guard.trusted_proxies', ['198.51.100.1']);
 
         $this->withServerVariables([
-            'REMOTE_ADDR'           => '198.51.100.1',
+            'REMOTE_ADDR' => '198.51.100.1',
             'HTTP_CF_CONNECTING_IP' => '203.0.113.60',
         ])->get('/.env')->assertNotFound();
 
@@ -134,7 +166,7 @@ class ProbeGuardMiddlewareTest extends TestCase
 
         $this->assertDatabaseHas('probe_guard_blocked_ips', [
             'ip_address' => '203.0.113.70',
-            'reason'     => 'Suspicious path pattern probe',
+            'reason' => 'Suspicious path pattern probe',
         ]);
     }
 
@@ -150,7 +182,7 @@ class ProbeGuardMiddlewareTest extends TestCase
             '/app_dev.php/_profiler/open?file=.env',
             '/xampp/php-cgi.exe?%ADd%20auto_prepend_file%3Dphp://input',
         ] as $index => $path) {
-            $ipAddress = '203.0.114.' . ($index + 1);
+            $ipAddress = '203.0.114.'.($index + 1);
 
             $this->withServerVariables(['REMOTE_ADDR' => $ipAddress])
                 ->get($path)
@@ -176,7 +208,7 @@ class ProbeGuardMiddlewareTest extends TestCase
             '/?file=..%2F..%2F..%2F..%2Fvar%2Fwww%2Fhtml%2F.env',
             '/?phpinfo=1',
         ] as $index => $path) {
-            $ipAddress = '203.0.115.' . ($index + 1);
+            $ipAddress = '203.0.115.'.($index + 1);
 
             $this->withServerVariables(['REMOTE_ADDR' => $ipAddress])
                 ->get($path)
@@ -202,7 +234,7 @@ class ProbeGuardMiddlewareTest extends TestCase
             '/downloads/report.zip',
             '/docs/openapi.yaml',
         ] as $index => $path) {
-            $this->withServerVariables(['REMOTE_ADDR' => '203.0.116.' . ($index + 1)])
+            $this->withServerVariables(['REMOTE_ADDR' => '203.0.116.'.($index + 1)])
                 ->get($path)
                 ->assertOk()
                 ->assertSee('missing');
@@ -214,24 +246,86 @@ class ProbeGuardMiddlewareTest extends TestCase
     public function test_cleanup_command_marks_expired_blocks_without_deleting_audit_history(): void
     {
         $blockedIp = BlockedIp::query()->create([
-            'ip_address'    => '203.0.113.80',
+            'ip_address' => '203.0.113.80',
+            'blocked_at' => now()->subDays(8),
+            'expires_at' => now()->subDay(),
             'blocked_until' => now()->subDay(),
+        ]);
+
+        BlockedIp::query()->create([
+            'ip_address' => '203.0.113.81',
+            'blocked_at' => now(),
+            'expires_at' => now()->addDay(),
+            'blocked_until' => now()->addDay(),
+        ]);
+
+        BlockedIp::query()->create([
+            'ip_address' => '203.0.113.82',
+            'blocked_at' => now(),
+            'expires_at' => null,
+            'blocked_until' => now()->addYears(100),
         ]);
 
         SuspiciousRequest::query()->create([
             'blocked_ip_id' => $blockedIp->id,
-            'ip_address'    => '203.0.113.80',
-            'detected_at'   => now()->subDay(),
+            'ip_address' => '203.0.113.80',
+            'detected_at' => now()->subDay(),
         ]);
 
         $this->artisan('probe-guard:cleanup-expired')
-            ->expectsOutput('Released 1 expired IP block(s).')
+            ->expectsOutput('Deleted 1 expired IP block(s).')
             ->assertSuccessful();
 
-        $this->assertDatabaseHas('probe_guard_blocked_ips', [
+        $this->assertDatabaseMissing('probe_guard_blocked_ips', [
             'ip_address' => '203.0.113.80',
-            'status'     => 'expired',
         ]);
+
+        $this->assertDatabaseHas('probe_guard_blocked_ips', [
+            'ip_address' => '203.0.113.81',
+        ]);
+
+        $this->assertDatabaseHas('probe_guard_blocked_ips', [
+            'ip_address' => '203.0.113.82',
+        ]);
+
         $this->assertDatabaseCount('probe_guard_suspicious_requests', 1);
+
+        $this->artisan('blocked-ips:cleanup')
+            ->expectsOutput('Deleted 0 expired IP block(s).')
+            ->assertSuccessful();
+    }
+
+    public function test_cleanup_command_is_registered_with_scheduler(): void
+    {
+        $events = collect(app(Schedule::class)->events());
+
+        $this->assertTrue($events->contains(
+            fn ($event): bool => str_contains($event->command ?? '', 'probe-guard:cleanup-expired')
+        ));
+    }
+
+    public function test_expired_ip_can_be_blocked_again_with_new_expiry(): void
+    {
+        Carbon::setTestNow('2026-09-10 10:00:00');
+
+        BlockedIp::query()->create([
+            'ip_address' => '203.0.113.90',
+            'blocked_at' => now()->subDays(10),
+            'expires_at' => now()->subDay(),
+            'blocked_until' => now()->subDay(),
+            'hit_count' => 1,
+        ]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.90'])
+            ->get('/composer.json')
+            ->assertNotFound();
+
+        $blockedIp = BlockedIp::query()->where('ip_address', '203.0.113.90')->firstOrFail();
+
+        $this->assertSame(2, $blockedIp->hit_count);
+        $this->assertTrue($blockedIp->blocked_at->equalTo(now()));
+        $this->assertTrue($blockedIp->expires_at->equalTo(now()->addDays(7)));
+
+        Carbon::setTestNow();
     }
 }
