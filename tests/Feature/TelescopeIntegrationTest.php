@@ -36,9 +36,9 @@ class TelescopeIntegrationTest extends TestCase
         $app['config']->set('telescope.storage.database.connection', 'testing');
         $app['config']->set('telescope.watchers', [
             QueryWatcher::class => true,
-            LogWatcher::class => [
+            LogWatcher::class   => [
                 'enabled' => true,
-                'level' => 'debug',
+                'level'   => 'debug',
             ],
         ]);
     }
@@ -47,7 +47,7 @@ class TelescopeIntegrationTest extends TestCase
     {
         parent::setUp();
 
-        $this->loadMigrationsFrom(__DIR__.'/../../vendor/laravel/telescope/database/migrations');
+        $this->loadMigrationsFrom(__DIR__ . '/../../vendor/laravel/telescope/database/migrations');
         Telescope::flushEntries();
         Telescope::startRecording(false);
     }
@@ -63,13 +63,13 @@ class TelescopeIntegrationTest extends TestCase
     public function test_blocked_ip_request_is_rejected_and_not_stored_by_telescope(): void
     {
         BlockedIp::query()->create([
-            'ip_address' => '203.0.113.201',
-            'reason' => 'Suspicious path probe',
-            'path' => '/config.json',
-            'method' => 'GET',
-            'hit_count' => 1,
-            'blocked_at' => now()->subDay(),
-            'expires_at' => now()->addDays(6),
+            'ip_address'    => '203.0.113.201',
+            'reason'        => 'Suspicious path probe',
+            'path'          => '/config.json',
+            'method'        => 'GET',
+            'hit_count'     => 1,
+            'blocked_at'    => now()->subDay(),
+            'expires_at'    => now()->addDays(6),
             'blocked_until' => now()->addDays(7),
         ]);
 
@@ -80,8 +80,8 @@ class TelescopeIntegrationTest extends TestCase
 
         Log::warning('blocked request package noise');
         Telescope::recordRequest(IncomingEntry::make([
-            'uri' => '/',
-            'method' => 'GET',
+            'uri'             => '/',
+            'method'          => 'GET',
             'response_status' => 403,
         ]));
 
@@ -93,13 +93,13 @@ class TelescopeIntegrationTest extends TestCase
     public function test_expired_blocked_ip_request_resumes_normal_telescope_recording(): void
     {
         BlockedIp::query()->create([
-            'ip_address' => '203.0.113.202',
-            'reason' => 'Suspicious path probe',
-            'path' => '/config.json',
-            'method' => 'GET',
-            'hit_count' => 1,
-            'blocked_at' => now()->subDays(8),
-            'expires_at' => now()->subMinute(),
+            'ip_address'    => '203.0.113.202',
+            'reason'        => 'Suspicious path probe',
+            'path'          => '/config.json',
+            'method'        => 'GET',
+            'hit_count'     => 1,
+            'blocked_at'    => now()->subDays(8),
+            'expires_at'    => now()->subMinute(),
             'blocked_until' => now()->subMinute(),
         ]);
 
@@ -108,8 +108,8 @@ class TelescopeIntegrationTest extends TestCase
             ->assertOk();
 
         Telescope::recordRequest(IncomingEntry::make([
-            'uri' => '/',
-            'method' => 'GET',
+            'uri'             => '/',
+            'method'          => 'GET',
             'response_status' => 200,
         ]));
         Telescope::store(app(EntriesRepository::class));
@@ -125,8 +125,8 @@ class TelescopeIntegrationTest extends TestCase
         DB::select('select 1 as normal_probe_guard_test');
         Log::warning('normal request log entry');
         Telescope::recordRequest(IncomingEntry::make([
-            'uri' => '/',
-            'method' => 'GET',
+            'uri'             => '/',
+            'method'          => 'GET',
             'response_status' => 200,
         ]));
 
@@ -145,8 +145,8 @@ class TelescopeIntegrationTest extends TestCase
         $this->app['request']->attributes->set('probe_guard.blocked_ip_request', true);
 
         Telescope::recordRequest(IncomingEntry::make([
-            'uri' => '/',
-            'method' => 'GET',
+            'uri'             => '/',
+            'method'          => 'GET',
             'response_status' => 403,
         ]));
         Telescope::store(app(EntriesRepository::class));

@@ -4,7 +4,6 @@ namespace ProbeGuard\LaravelProbeGuard\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use ProbeGuard\LaravelProbeGuard\Contracts\BlockRepository;
 use ProbeGuard\LaravelProbeGuard\Contracts\IpResolver;
 use ProbeGuard\LaravelProbeGuard\Contracts\ThreatDetector;
@@ -20,7 +19,7 @@ class BlockMaliciousRequests
     ) {}
 
     /**
-     * @param  Closure(Request): Response  $next
+     * @param Closure(Request): Response $next
      */
     public function handle(Request $request, Closure $next): Response
     {

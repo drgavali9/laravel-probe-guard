@@ -23,7 +23,7 @@ class RequestGuardServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/probe-guard.php', 'probe-guard');
+        $this->mergeConfigFrom(__DIR__ . '/../config/probe-guard.php', 'probe-guard');
 
         $this->app->bind(ThreatDetector::class, ThreatDetectionService::class);
         $this->app->bind(IpResolver::class, ClientIpResolver::class);
@@ -33,11 +33,11 @@ class RequestGuardServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->publishes([
-            __DIR__.'/../config/probe-guard.php' => config_path('probe-guard.php'),
+            __DIR__ . '/../config/probe-guard.php' => config_path('probe-guard.php'),
         ], 'probe-guard-config');
 
         $this->publishesMigrations([
-            __DIR__.'/../database/migrations' => database_path('migrations'),
+            __DIR__ . '/../database/migrations' => database_path('migrations'),
         ], 'probe-guard-migrations');
 
         $this->app->make(Router::class)->aliasMiddleware(

@@ -35,18 +35,18 @@ class IpBlockService implements BlockRepository
         $blockedIp = BlockedIp::query()->updateOrCreate(
             ['ip_address' => $ipAddress],
             [
-                'status' => BlockStatus::Active,
-                'reason' => $result->reason,
-                'severity' => $result->severity,
-                'path' => '/'.ltrim($request->path(), '/'),
-                'method' => $request->method(),
-                'user_agent' => $request->userAgent(),
-                'hit_count' => ($blockedIp?->hit_count ?? 0) + 1,
-                'blocked_at' => $blockedAt,
-                'expires_at' => $expiresAt,
-                'blocked_until' => $expiresAt,
+                'status'          => BlockStatus::Active,
+                'reason'          => $result->reason,
+                'severity'        => $result->severity,
+                'path'            => '/' . ltrim($request->path(), '/'),
+                'method'          => $request->method(),
+                'user_agent'      => $request->userAgent(),
+                'hit_count'       => ($blockedIp?->hit_count ?? 0) + 1,
+                'blocked_at'      => $blockedAt,
+                'expires_at'      => $expiresAt,
+                'blocked_until'   => $expiresAt,
                 'last_attempt_at' => $now,
-                'unblocked_at' => null,
+                'unblocked_at'    => null,
             ],
         );
 
@@ -60,10 +60,10 @@ class IpBlockService implements BlockRepository
     public function recordBlockedHit(BlockedIp $blockedIp, Request $request): void
     {
         $blockedIp->forceFill([
-            'hit_count' => $blockedIp->hit_count + 1,
-            'path' => '/'.ltrim($request->path(), '/'),
-            'method' => $request->method(),
-            'user_agent' => $request->userAgent(),
+            'hit_count'       => $blockedIp->hit_count + 1,
+            'path'            => '/' . ltrim($request->path(), '/'),
+            'method'          => $request->method(),
+            'user_agent'      => $request->userAgent(),
             'last_attempt_at' => now(),
         ])->save();
     }
@@ -71,7 +71,7 @@ class IpBlockService implements BlockRepository
     public function unblock(BlockedIp $blockedIp): bool
     {
         $saved = $blockedIp->forceFill([
-            'status' => BlockStatus::Expired,
+            'status'       => BlockStatus::Expired,
             'unblocked_at' => now(),
         ])->save();
 
@@ -97,17 +97,17 @@ class IpBlockService implements BlockRepository
     {
         SuspiciousRequest::query()->create([
             'blocked_ip_id' => $blockedIp->id,
-            'ip_address' => $ipAddress,
-            'reason' => $result->reason,
-            'severity' => $result->severity,
-            'path' => '/'.ltrim($request->path(), '/'),
-            'method' => $request->method(),
-            'user_agent' => $request->userAgent(),
-            'headers' => [
+            'ip_address'    => $ipAddress,
+            'reason'        => $result->reason,
+            'severity'      => $result->severity,
+            'path'          => '/' . ltrim($request->path(), '/'),
+            'method'        => $request->method(),
+            'user_agent'    => $request->userAgent(),
+            'headers'       => [
                 'referer' => $request->headers->get('referer'),
-                'cf-ray' => $request->headers->get('cf-ray'),
+                'cf-ray'  => $request->headers->get('cf-ray'),
             ],
-            'metadata' => $result->metadata,
+            'metadata'    => $result->metadata,
             'detected_at' => now(),
         ]);
     }

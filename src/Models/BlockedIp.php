@@ -19,13 +19,13 @@ class BlockedIp extends Model
     protected function casts(): array
     {
         return [
-            'blocked_at' => 'datetime',
-            'expires_at' => 'datetime',
-            'blocked_until' => 'datetime',
+            'blocked_at'      => 'datetime',
+            'expires_at'      => 'datetime',
+            'blocked_until'   => 'datetime',
             'last_attempt_at' => 'datetime',
-            'unblocked_at' => 'datetime',
-            'status' => BlockStatus::class,
-            'severity' => ThreatSeverity::class,
+            'unblocked_at'    => 'datetime',
+            'status'          => BlockStatus::class,
+            'severity'        => ThreatSeverity::class,
         ];
     }
 
