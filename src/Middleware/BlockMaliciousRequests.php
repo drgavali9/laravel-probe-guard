@@ -57,6 +57,12 @@ class BlockMaliciousRequests
             return $next($request);
         }
 
+        // Mark the first detected probe as well as later requests from the blocked IP.
+        // This must happen before events, database writes, and logging so Telescope can
+        // discard every entry collected during this request, including concurrent probes.
+        $request->attributes->set('probe_guard.blocked_ip_request', true);
+        $request->attributes->set('probe_guard.blocked_ip_address', $ipAddress);
+
         event(new ThreatDetected($ipAddress, $request, $result));
 
         $this->blocks->block($ipAddress, $request, $result);

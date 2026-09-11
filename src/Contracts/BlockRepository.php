@@ -15,6 +15,8 @@ interface BlockRepository
 
     public function recordBlockedHit(BlockedIp $blockedIp, Request $request): void;
 
+    public function extend(BlockedIp $blockedIp): bool;
+
     public function unblock(BlockedIp $blockedIp): bool;
 
     public function cleanupExpired(): int;

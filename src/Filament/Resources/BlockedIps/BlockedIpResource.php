@@ -3,7 +3,6 @@
 namespace ProbeGuard\LaravelProbeGuard\Filament\Resources\BlockedIps;
 
 use BackedEnum;
-use DateInterval;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -65,8 +64,13 @@ class BlockedIpResource extends Resource
                 TextColumn::make('path')->searchable()->limit(48)->tooltip(fn (BlockedIp $record): ?string => $record->path)->toggleable(),
                 TextColumn::make('method')->badge()->toggleable(),
                 TextColumn::make('hit_count')->label('Hits')->numeric()->sortable(),
-                TextColumn::make('blocked_until')->dateTime()->sortable()->badge()->color(fn (BlockedIp $record): string => $record->isActive() ? 'danger' : 'gray'),
-                TextColumn::make('last_attempt_at')->dateTime()->sortable()->toggleable(),
+                TextColumn::make('expires_at')
+                    ->label('Blocked until')
+                    ->dateTime(timezone: config('app.timezone'))
+                    ->sortable()
+                    ->badge()
+                    ->color(fn (BlockedIp $record): string => $record->isActive() ? 'danger' : 'gray'),
+                TextColumn::make('last_attempt_at')->dateTime(timezone: config('app.timezone'))->sortable()->toggleable(),
                 TextColumn::make('unblocked_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
@@ -89,12 +93,7 @@ class BlockedIpResource extends Resource
                         ->label('Extend block')
                         ->icon('heroicon-o-clock')
                         ->requiresConfirmation()
-                        ->action(fn (BlockedIp $record): bool => $record->forceFill([
-                            'blocked_until' => ($record->blocked_until?->isFuture() === true ? $record->blocked_until : now())
-                                ->copy()
-                                ->add(DateInterval::createFromDateString((string) config('probe-guard.block_duration', '7 days'))),
-                            'unblocked_at' => null,
-                        ])->save()),
+                        ->action(fn (BlockedIp $record): bool => app(BlockRepository::class)->extend($record)),
                 ])->icon('heroicon-m-ellipsis-vertical')->color('gray')->button()->hiddenLabel(),
             ])
             ->toolbarActions([

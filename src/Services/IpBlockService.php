@@ -10,6 +10,7 @@ use ProbeGuard\LaravelProbeGuard\Events\IpBlocked;
 use ProbeGuard\LaravelProbeGuard\Events\IpUnblocked;
 use ProbeGuard\LaravelProbeGuard\Models\BlockedIp;
 use ProbeGuard\LaravelProbeGuard\Models\SuspiciousRequest;
+use ProbeGuard\LaravelProbeGuard\Support\BlockDuration;
 use ProbeGuard\LaravelProbeGuard\Support\ThreatDetectionResult;
 
 class IpBlockService implements BlockRepository
@@ -30,7 +31,7 @@ class IpBlockService implements BlockRepository
             ? ($blockedIp->blocked_at ?? $now)
             : now();
 
-        $expiresAt = $baseUntil->copy()->addDays($this->blockDurationDays());
+        $expiresAt = $baseUntil->copy()->addDays(BlockDuration::days());
 
         $blockedIp = BlockedIp::query()->updateOrCreate(
             ['ip_address' => $ipAddress],
@@ -65,6 +66,20 @@ class IpBlockService implements BlockRepository
             'method'          => $request->method(),
             'user_agent'      => $request->userAgent(),
             'last_attempt_at' => now(),
+        ])->save();
+    }
+
+    public function extend(BlockedIp $blockedIp): bool
+    {
+        $expiresAt = ($blockedIp->expires_at?->isFuture() === true ? $blockedIp->expires_at : now())
+            ->copy()
+            ->addDays(BlockDuration::days());
+
+        return $blockedIp->forceFill([
+            'status'        => BlockStatus::Active,
+            'expires_at'    => $expiresAt,
+            'blocked_until' => $expiresAt,
+            'unblocked_at'  => null,
         ])->save();
     }
 
@@ -110,16 +125,5 @@ class IpBlockService implements BlockRepository
             'metadata'    => $result->metadata,
             'detected_at' => now(),
         ]);
-    }
-
-    private function blockDurationDays(): int
-    {
-        $legacyDuration = config('probe-guard.block_duration');
-
-        if (is_string($legacyDuration) && preg_match('/^\s*(\d+)\s+days?\s*$/i', $legacyDuration, $matches) === 1) {
-            return max(1, (int) $matches[1]);
-        }
-
-        return max(1, (int) config('probe-guard.block_duration_days', 7));
     }
 }

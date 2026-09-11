@@ -5,6 +5,7 @@ namespace ProbeGuard\LaravelProbeGuard\Tests\Feature;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use ProbeGuard\LaravelProbeGuard\Contracts\BlockRepository;
 use ProbeGuard\LaravelProbeGuard\Models\BlockedIp;
 use ProbeGuard\LaravelProbeGuard\Models\SuspiciousRequest;
 use ProbeGuard\LaravelProbeGuard\Tests\TestCase;
@@ -79,6 +80,53 @@ class ProbeGuardMiddlewareTest extends TestCase
         $blockedIp = BlockedIp::query()->where('ip_address', '203.0.113.21')->firstOrFail();
 
         $this->assertTrue($blockedIp->expires_at->equalTo(now()->addDays(3)));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_repair_migration_restores_configured_duration_for_invalid_active_blocks(): void
+    {
+        Carbon::setTestNow('2026-09-11 10:00:00');
+
+        $blockedIp = BlockedIp::query()->create([
+            'ip_address'      => '203.0.113.22',
+            'blocked_at'      => now(),
+            'expires_at'      => now(),
+            'blocked_until'   => now(),
+            'last_attempt_at' => now(),
+        ]);
+
+        $migration = require __DIR__ . '/../../database/migrations/2026_09_11_000000_repair_invalid_probe_guard_expiry.php';
+        $migration->up();
+
+        $blockedIp->refresh();
+
+        $this->assertTrue($blockedIp->expires_at->equalTo(now()->addDays(7)));
+        $this->assertTrue($blockedIp->blocked_until->equalTo($blockedIp->expires_at));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_extend_action_uses_configured_days_when_legacy_duration_is_null(): void
+    {
+        Carbon::setTestNow('2026-09-11 10:00:00');
+        config()->set('probe-guard.block_duration', null);
+        config()->set('probe-guard.block_duration_days', 7);
+
+        $blockedIp = BlockedIp::query()->create([
+            'ip_address'      => '203.0.113.23',
+            'blocked_at'      => now()->subDay(),
+            'expires_at'      => now()->addDay(),
+            'blocked_until'   => now()->addDay(),
+            'last_attempt_at' => now(),
+        ]);
+
+        $this->assertTrue(app(BlockRepository::class)->extend($blockedIp));
+
+        $blockedIp->refresh();
+
+        $this->assertTrue($blockedIp->expires_at->equalTo(now()->addDays(8)));
+        $this->assertTrue($blockedIp->blocked_until->equalTo($blockedIp->expires_at));
 
         Carbon::setTestNow();
     }

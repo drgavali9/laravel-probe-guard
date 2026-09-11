@@ -12,6 +12,7 @@ use Laravel\Telescope\Telescope;
 use Laravel\Telescope\TelescopeServiceProvider;
 use Laravel\Telescope\Watchers\LogWatcher;
 use Laravel\Telescope\Watchers\QueryWatcher;
+use Laravel\Telescope\Watchers\RequestWatcher;
 use ProbeGuard\LaravelProbeGuard\Models\BlockedIp;
 use ProbeGuard\LaravelProbeGuard\Tests\TestCase;
 
@@ -35,8 +36,9 @@ class TelescopeIntegrationTest extends TestCase
         $app['config']->set('telescope.driver', 'database');
         $app['config']->set('telescope.storage.database.connection', 'testing');
         $app['config']->set('telescope.watchers', [
-            QueryWatcher::class => true,
-            LogWatcher::class   => [
+            RequestWatcher::class => true,
+            QueryWatcher::class   => true,
+            LogWatcher::class     => [
                 'enabled' => true,
                 'level'   => 'debug',
             ],
@@ -78,15 +80,24 @@ class TelescopeIntegrationTest extends TestCase
             ->assertForbidden()
             ->assertHeader('X-Probe-Guard-Blocked', '1');
 
-        Log::warning('blocked request package noise');
-        Telescope::recordRequest(IncomingEntry::make([
-            'uri'             => '/',
-            'method'          => 'GET',
-            'response_status' => 403,
-        ]));
+        Telescope::store(app(EntriesRepository::class));
+
+        $this->assertDatabaseCount('telescope_entries', 0);
+    }
+
+    public function test_first_request_that_creates_block_is_not_stored_by_telescope(): void
+    {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.203'])
+            ->get('/config.json')
+            ->assertNotFound()
+            ->assertHeader('X-Probe-Guard-Blocked', '1');
 
         Telescope::store(app(EntriesRepository::class));
 
+        $this->assertDatabaseHas('probe_guard_blocked_ips', [
+            'ip_address' => '203.0.113.203',
+            'path'       => '/config.json',
+        ]);
         $this->assertDatabaseCount('telescope_entries', 0);
     }
 
