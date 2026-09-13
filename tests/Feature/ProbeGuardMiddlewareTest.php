@@ -5,6 +5,8 @@ namespace ProbeGuard\LaravelProbeGuard\Tests\Feature;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use ProbeGuard\LaravelProbeGuard\Contracts\BlockRepository;
 use ProbeGuard\LaravelProbeGuard\Models\BlockedIp;
 use ProbeGuard\LaravelProbeGuard\Models\SuspiciousRequest;
@@ -155,6 +157,66 @@ class ProbeGuardMiddlewareTest extends TestCase
             'path'       => '/',
             'hit_count'  => 2,
         ]);
+    }
+
+    public function test_active_database_block_is_cached_and_later_lookup_avoids_select_query(): void
+    {
+        BlockedIp::query()->create([
+            'ip_address'    => '203.0.113.31',
+            'hit_count'     => 1,
+            'blocked_at'    => now(),
+            'expires_at'    => now()->addDays(7),
+            'blocked_until' => now()->addDays(7),
+        ]);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.31'])->get('/')->assertForbidden();
+
+        $this->assertArrayHasKey('203.0.113.31', Cache::get('probe-guard:blocked-ips'));
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.31'])->get('/')->assertForbidden();
+
+        $selects = collect(DB::getQueryLog())->filter(
+            fn (array $query): bool => str_starts_with(strtolower(ltrim($query['query'])), 'select')
+                && str_contains($query['query'], 'probe_guard_blocked_ips')
+        );
+
+        $this->assertCount(0, $selects);
+        $this->assertDatabaseHas('probe_guard_blocked_ips', [
+            'ip_address' => '203.0.113.31',
+            'hit_count'  => 3,
+        ]);
+    }
+
+    public function test_newly_detected_block_is_added_to_cache(): void
+    {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.32'])
+            ->get('/composer.json')
+            ->assertNotFound();
+
+        $cached = Cache::get('probe-guard:blocked-ips');
+
+        $this->assertArrayHasKey('203.0.113.32', $cached);
+        $this->assertSame('203.0.113.32', $cached['203.0.113.32']['attributes']['ip_address']);
+    }
+
+    public function test_unblocking_removes_ip_from_cache(): void
+    {
+        $blockedIp = BlockedIp::query()->create([
+            'ip_address'    => '203.0.113.33',
+            'blocked_at'    => now(),
+            'expires_at'    => now()->addDays(7),
+            'blocked_until' => now()->addDays(7),
+        ]);
+
+        app(BlockRepository::class)->find($blockedIp->ip_address);
+        $this->assertArrayHasKey($blockedIp->ip_address, Cache::get('probe-guard:blocked-ips'));
+
+        app(BlockRepository::class)->unblock($blockedIp);
+
+        $this->assertNull(Cache::get('probe-guard:blocked-ips'));
     }
 
     public function test_expired_block_is_marked_released_and_request_is_allowed(): void

@@ -27,6 +27,10 @@ abstract class TestCase extends Orchestra
         $app['config']->set('probe-guard.ip_whitelist', []);
         $app['config']->set('probe-guard.trusted_proxy_headers', ['cf-connecting-ip']);
         $app['config']->set('probe-guard.trusted_proxies', []);
+        $app['config']->set('cache.default', 'array');
+        $app['config']->set('probe-guard.cache.enabled', true);
+        $app['config']->set('probe-guard.cache.key', 'probe-guard:blocked-ips');
+        $app['config']->set('probe-guard.cache.ttl_seconds', 86400);
     }
 
     protected function defineRoutes($router): void
@@ -41,5 +45,6 @@ abstract class TestCase extends Orchestra
         parent::setUp();
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->app['cache']->flush();
     }
 }

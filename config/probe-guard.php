@@ -18,6 +18,12 @@ return [
 
     'extend_existing_blocks' => true,
 
+    'cache' => [
+        'enabled'     => env('PROBE_GUARD_CACHE_ENABLED', true),
+        'key'         => env('PROBE_GUARD_CACHE_KEY', 'probe-guard:blocked-ips'),
+        'ttl_seconds' => (int) env('PROBE_GUARD_CACHE_TTL', 86400),
+    ],
+
     'blocked_response' => [
         'status' => 403,
         'body'   => 'Access blocked temporarily due to suspicious activity.',

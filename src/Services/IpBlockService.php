@@ -4,6 +4,7 @@ namespace ProbeGuard\LaravelProbeGuard\Services;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use ProbeGuard\LaravelProbeGuard\Contracts\BlockRepository;
 use ProbeGuard\LaravelProbeGuard\Enums\BlockStatus;
 use ProbeGuard\LaravelProbeGuard\Events\IpBlocked;
@@ -17,7 +18,21 @@ class IpBlockService implements BlockRepository
 {
     public function find(string $ipAddress): ?BlockedIp
     {
-        return BlockedIp::query()->where('ip_address', $ipAddress)->first();
+        if ($cachedAttributes = $this->cached($ipAddress)) {
+            $blockedIp = new BlockedIp;
+            $blockedIp->setRawAttributes($cachedAttributes, true);
+            $blockedIp->exists = true;
+
+            return $blockedIp;
+        }
+
+        $blockedIp = BlockedIp::query()->where('ip_address', $ipAddress)->first();
+
+        if ($blockedIp?->isActive() === true) {
+            $this->cache($blockedIp);
+        }
+
+        return $blockedIp;
     }
 
     public function block(string $ipAddress, Request $request, ThreatDetectionResult $result): BlockedIp
@@ -55,6 +70,8 @@ class IpBlockService implements BlockRepository
 
         event(new IpBlocked($blockedIp));
 
+        $this->cache($blockedIp);
+
         return $blockedIp;
     }
 
@@ -67,6 +84,8 @@ class IpBlockService implements BlockRepository
             'user_agent'      => $request->userAgent(),
             'last_attempt_at' => now(),
         ])->save();
+
+        $this->cache($blockedIp);
     }
 
     public function extend(BlockedIp $blockedIp): bool
@@ -75,12 +94,18 @@ class IpBlockService implements BlockRepository
             ->copy()
             ->addDays(BlockDuration::days());
 
-        return $blockedIp->forceFill([
+        $saved = $blockedIp->forceFill([
             'status'        => BlockStatus::Active,
             'expires_at'    => $expiresAt,
             'blocked_until' => $expiresAt,
             'unblocked_at'  => null,
         ])->save();
+
+        if ($saved) {
+            $this->cache($blockedIp);
+        }
+
+        return $saved;
     }
 
     public function unblock(BlockedIp $blockedIp): bool
@@ -91,6 +116,8 @@ class IpBlockService implements BlockRepository
         ])->save();
 
         event(new IpUnblocked($blockedIp));
+
+        $this->forgetCached($blockedIp->ip_address);
 
         return $saved;
     }
@@ -125,5 +152,95 @@ class IpBlockService implements BlockRepository
             'metadata'    => $result->metadata,
             'detected_at' => now(),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function cached(string $ipAddress): ?array
+    {
+        if (! config('probe-guard.cache.enabled', true)) {
+            return null;
+        }
+
+        $blockedIps = Cache::get($this->cacheKey(), []);
+        $entry = is_array($blockedIps) ? ($blockedIps[$ipAddress] ?? null) : null;
+
+        if (! is_array($entry) || ! isset($entry['attributes'], $entry['cached_until'])) {
+            return null;
+        }
+
+        if ((int) $entry['cached_until'] <= now()->timestamp) {
+            $this->forgetCached($ipAddress);
+
+            return null;
+        }
+
+        return is_array($entry['attributes']) ? $entry['attributes'] : null;
+    }
+
+    private function cache(BlockedIp $blockedIp): void
+    {
+        if (! config('probe-guard.cache.enabled', true) || ! $blockedIp->isActive()) {
+            return;
+        }
+
+        $this->mutateCache(function (array $blockedIps) use ($blockedIp): array {
+            $blockedIps[$blockedIp->ip_address] = [
+                'attributes'   => $blockedIp->getAttributes(),
+                'cached_until' => now()->addSeconds($this->cacheTtl())->timestamp,
+            ];
+
+            return $blockedIps;
+        });
+    }
+
+    private function forgetCached(string $ipAddress): void
+    {
+        if (! config('probe-guard.cache.enabled', true)) {
+            return;
+        }
+
+        $this->mutateCache(function (array $blockedIps) use ($ipAddress): array {
+            unset($blockedIps[$ipAddress]);
+
+            return $blockedIps;
+        });
+    }
+
+    /**
+     * @param callable(array<string, array<string, mixed>>): array<string, array<string, mixed>> $callback
+     */
+    private function mutateCache(callable $callback): void
+    {
+        $lock = Cache::lock($this->cacheKey() . ':lock', 5);
+
+        if (! $lock->get()) {
+            return;
+        }
+
+        try {
+            $blockedIps = Cache::get($this->cacheKey(), []);
+            $blockedIps = is_array($blockedIps) ? $blockedIps : [];
+            $blockedIps = $callback($blockedIps);
+
+            if ($blockedIps === []) {
+                Cache::forget($this->cacheKey());
+            } else {
+                Cache::put($this->cacheKey(), $blockedIps, $this->cacheTtl());
+            }
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function cacheKey(): string
+    {
+        return (string) config('probe-guard.cache.key', 'probe-guard:blocked-ips');
+    }
+
+    private function cacheTtl(): int
+    {
+        return max(1, (int) config('probe-guard.cache.ttl_seconds', 86400));
     }
 }

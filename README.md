@@ -75,6 +75,7 @@ What was KirayaBook-specific:
 What became configurable:
 
 - Block duration, whitelist, safe paths/prefixes, suspicious exact paths, prefixes, extensions, regexes, query probes, response status/body, table names, middleware alias, logging channel, trusted proxy headers, trusted proxy IPs, and optional global middleware registration.
+- Active blocked IP lookups are cached for one day by default. Configure this with `PROBE_GUARD_CACHE_ENABLED`, `PROBE_GUARD_CACHE_KEY`, and `PROBE_GUARD_CACHE_TTL` (seconds).
 
 Security weaknesses addressed:
 
