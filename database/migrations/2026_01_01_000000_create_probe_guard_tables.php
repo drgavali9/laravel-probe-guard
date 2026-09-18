@@ -20,7 +20,7 @@ return new class extends Migration
             $table->unsignedInteger('hit_count')->default(1);
             $table->timestamp('blocked_at')->nullable()->index();
             $table->timestamp('expires_at')->nullable()->index();
-            $table->timestamp('blocked_until')->index();
+            $table->timestamp('blocked_until')->nullable()->index();
             $table->timestamp('last_attempt_at')->nullable();
             $table->timestamp('unblocked_at')->nullable();
             $table->timestamps();
